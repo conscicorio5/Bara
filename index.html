@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" href="/icon.png">
+<title>DuoChat</title>
+<style>
+:root{
+  --bg:#f4f4f6; --panel:#ffffff; --text:#1a1a1e; --sub:#6b6b74;
+  --accent:#6c5ce7; --accent2:#00b894; --bubble-me:#6c5ce7; --bubble-them:#e9e9ee; --border:#e2e2e8;
+  box-sizing:border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141417; --panel:#1e1e23; --text:#f2f2f5; --sub:#9a9aa4;
+    --bubble-them:#2b2b32; --border:#2d2d34;
+  }
+}
+*{box-sizing:border-box;}
+html{height:100%; scroll-padding-top: env(safe-area-inset-top,0px);}
+body{height:100%; margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;}
+
+button{font-family:inherit;}
+input{font-family:inherit;}
+
+/* --- Ecrans plein ecran (setup / lock) --- */
+.fullscreen{
+  position:fixed; inset:0; background:var(--bg); z-index:30;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px;
+}
+.fullscreen h2{margin:0; font-size:19px; text-align:center;}
+.fullscreen input{
+  padding:12px 16px; border-radius:14px; border:1px solid var(--border);
+  background:var(--panel); color:var(--text); font-size:16px; width:100%; max-width:280px; text-align:center;
+}
+.fullscreen button.primary{
+  background:var(--accent); color:#fff; border:none; border-radius:14px;
+  padding:12px 24px; font-size:16px; cursor:pointer; width:100%; max-width:280px;
+}
+.fullscreen p.hint{color:var(--sub); font-size:13px; text-align:center; max-width:280px;}
+.err{color:#e15656; font-size:13px; min-height:16px;}
+
+#dots{display:flex; gap:14px;}
+.dot{width:14px; height:14px; border-radius:50%; border:1.5px solid var(--sub); background:transparent;}
+.dot.filled{background:var(--accent); border-color:var(--accent);}
+#keypad{display:grid; grid-template-columns:repeat(3,64px); gap:14px; margin-top:6px;}
+#keypad button{
+  width:64px; height:64px; border-radius:50%; border:1px solid var(--border);
+  background:var(--panel); color:var(--text); font-size:22px; cursor:pointer;
+}
+#keypad button:active{background:var(--bubble-them);}
+
+/* --- Liste des discussions --- */
+#listScreen{display:none; flex-direction:column; flex:1; min-height:0;}
+#listScreen.active{display:flex;}
+.topbar{
+  padding: calc(10px + env(safe-area-inset-top,0px)) 16px 10px;
+  background:var(--panel); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:5;
+}
+.topbar h1{font-size:19px; margin:0;}
+.iconbtn{
+  border:none; background:var(--bubble-them); color:var(--text); width:38px; height:38px;
+  border-radius:50%; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+#convoList{flex:1; overflow-y:auto; padding:8px 0;}
+.convoRow{
+  display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer;
+  border-bottom:1px solid var(--border);
+}
+.convoAvatar{
+  width:46px; height:46px; border-radius:50%; background:var(--accent); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:600; flex-shrink:0;
+}
+.convoInfo{flex:1; min-width:0;}
+.convoInfo .label{font-size:16px; font-weight:600; margin:0 0 2px;}
+.convoInfo .preview{font-size:13px; color:var(--sub); margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.emptyState{padding:40px 24px; text-align:center; color:var(--sub);}
+
+/* --- Ecran de conversation --- */
+#roomScreen{display:none; flex-direction:column; flex:1; min-height:0;}
+#roomScreen.active{display:flex;}
+.roomHeader{
+  padding: calc(10px + env(safe-area-inset-top,0px)) 12px 10px;
+  background:var(--panel); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:5;
+}
+.roomHeader h2{font-size:16px; margin:0; flex:1;}
+.roomHeader .sub{font-size:11px; color:var(--sub); display:block;}
+.backBtn{border:none; background:none; color:var(--accent); font-size:22px; cursor:pointer; padding:4px 6px;}
+
+#chatLog{flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:6px;}
+.msgWrap{display:flex; flex-direction:column;}
+.msgWrap.me{align-items:flex-end;}
+.msgWrap.them{align-items:flex-start;}
+.msg{max-width:75%; padding:9px 13px; border-radius:16px; font-size:15px; line-height:1.35; word-wrap:break-word; position:relative;}
+.msg.me{background:var(--bubble-me); color:#fff; border-bottom-right-radius:4px;}
+.msg.them{background:var(--bubble-them); color:var(--text); border-bottom-left-radius:4px;}
+.msg img{max-width:220px; border-radius:12px; display:block;}
+.msg audio{max-width:220px;}
+.msg .name{font-size:11px; opacity:.7; display:block; margin-bottom:2px;}
+.msgActions{display:flex; gap:8px; margin-top:2px;}
+.msgActions button{background:none; border:none; color:var(--sub); font-size:11px; cursor:pointer; padding:2px 4px;}
+.saveBtn{background:rgba(0,0,0,0.4); color:#fff; border:none; border-radius:8px; font-size:11px; padding:4px 8px; margin-top:4px; cursor:pointer;}
+
+#chatInputRow{display:flex; gap:6px; padding:8px 10px; background:var(--panel); border-top:1px solid var(--border);
+  padding-bottom: calc(8px + env(safe-area-inset-bottom,0px)); align-items:center;}
+#chatInputRow input[type=text]{flex:1; padding:10px 14px; border-radius:20px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); font-size:15px; outline:none;}
+.roundBtn{
+  background:var(--bubble-them); color:var(--text); border:none; border-radius:50%;
+  width:38px; height:38px; font-size:16px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.roundBtn.recording{background:#e15656; color:#fff;}
+#sendBtn{background:var(--accent); color:#fff; border:none; border-radius:20px; padding:0 16px; height:38px; font-size:14px; cursor:pointer; flex-shrink:0;}
+#connStatus{font-size:12px; color:var(--sub); text-align:center; padding:4px;}
+
+/* --- Panneau Morpion (overlay) --- */
+#gamePanel{
+  position:absolute; inset:0; background:var(--bg); z-index:15; display:none;
+  flex-direction:column; align-items:center; justify-content:flex-start; padding:20px 16px; gap:16px; overflow-y:auto;
+}
+#gamePanel.active{display:flex;}
+#gamePanel .closeGame{align-self:flex-start; background:none; border:none; color:var(--accent); font-size:15px; cursor:pointer;}
+#gameStatus{font-size:15px; color:var(--sub); text-align:center;}
+#board{display:grid; grid-template-columns:repeat(3,84px); grid-template-rows:repeat(3,84px); gap:8px;}
+.cell{background:var(--panel); border:1px solid var(--border); border-radius:12px; font-size:38px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--accent); user-select:none;}
+#resetGame{background:var(--bubble-them); color:var(--text); border:none; border-radius:20px; padding:10px 18px; font-size:14px; cursor:pointer;}
+
+/* --- Banniere invitation morpion --- */
+#inviteBanner{
+  display:none; position:absolute; top:calc(56px + env(safe-area-inset-top,0px)); left:12px; right:12px;
+  background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px 14px; z-index:20;
+  box-shadow:0 4px 16px rgba(0,0,0,0.15);
+}
+#inviteBanner.active{display:block;}
+#inviteBanner p{margin:0 0 10px; font-size:14px;}
+#inviteBanner .row{display:flex; gap:8px;}
+#inviteBanner button{flex:1; border:none; border-radius:10px; padding:8px; font-size:14px; cursor:pointer;}
+#inviteAccept{background:var(--accent); color:#fff;}
+#inviteDecline{background:var(--bubble-them); color:var(--text);}
+
+/* --- Modales generiques --- */
+#modalOverlay{
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:40;
+  align-items:center; justify-content:center; padding:20px;
+}
+#modalOverlay.active{display:flex;}
+.modalBox{background:var(--panel); border-radius:16px; padding:20px; width:100%; max-width:320px;}
+.modalBox h3{margin:0 0 12px; font-size:17px;}
+.modalBox input{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); font-size:15px; margin-bottom:10px;}
+.modalBox .code-display{font-size:26px; font-weight:600; letter-spacing:3px; text-align:center; color:var(--accent2); margin:10px 0;}
+.modalBox .row{display:flex; gap:8px; margin-top:10px;}
+.modalBox button{flex:1; border:none; border-radius:10px; padding:10px; font-size:14px; cursor:pointer;}
+.modalBox button.primary{background:var(--accent); color:#fff;}
+.modalBox button.secondary{background:var(--bubble-them); color:var(--text);}
+.modalBox button.danger{background:#e15656; color:#fff;}
+.modalBox p.small{font-size:13px; color:var(--sub); margin:6px 0;}
+.tabRow{display:flex; gap:6px; margin-bottom:14px;}
+.tabRow button{flex:1; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer;}
+.tabRow button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+.tabPane{display:none;}
+.tabPane.active{display:block;}
+</style>
+</head>
+<body>
+
+<!-- Ecran d'accueil / configuration initiale -->
+<div id="setupScreen" class="fullscreen">
+  <h2>👋 Bienvenue sur DuoChat</h2>
+  <input id="setupName" maxlength="20" placeholder="Ton prénom">
+  <input id="setupServer" placeholder="Adresse du serveur (https://...)">
+  <input id="setupPin" maxlength="4" inputmode="numeric" placeholder="Choisis un code à 4 chiffres">
+  <p class="err" id="setupError"></p>
+  <button class="primary" id="setupOk">Commencer</button>
+  <p class="hint">Le code protège l'ouverture de l'appli sur ce téléphone.</p>
+</div>
+
+<!-- Verrou PIN -->
+<div id="lockScreen" class="fullscreen" style="display:none;">
+  <h2>🔒 Code d'accès</h2>
+  <div id="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+  <p class="err" id="lockError"></p>
+  <div id="keypad"></div>
+</div>
+
+<!-- Liste des discussions -->
+<div id="listScreen">
+  <div class="topbar">
+    <h1>💬 DuoChat</h1>
+    <button class="iconbtn" id="newConvoBtn">+</button>
+  </div>
+  <div id="convoList"></div>
+</div>
+
+<!-- Ecran de conversation -->
+<div id="roomScreen" style="position:relative;">
+  <div class="roomHeader">
+    <button class="backBtn" id="backBtn">‹</button>
+    <div>
+      <h2 id="roomLabel">—</h2>
+      <span class="sub" id="roomSub"></span>
+    </div>
+    <button class="iconbtn" id="notifBtn" title="Notifications">🔔</button>
+    <button class="iconbtn" id="gameBtn" title="Morpion">🎮</button>
+  </div>
+
+  <div id="inviteBanner">
+    <p id="inviteText"></p>
+    <div class="row">
+      <button id="inviteAccept">Accepter</button>
+      <button id="inviteDecline">Refuser</button>
+    </div>
+  </div>
+
+  <div id="connStatus"></div>
+  <div id="chatLog"></div>
+  <div id="chatInputRow">
+    <button class="roundBtn" id="photoBtn">📷</button>
+    <button class="roundBtn" id="micBtn">🎤</button>
+    <input type="text" id="chatInput" placeholder="Écris un message..." autocomplete="off">
+    <button id="sendBtn">Envoyer</button>
+  </div>
+  <input type="file" id="photoInput" accept="image/*" style="display:none;">
+
+  <div id="gamePanel">
+    <button class="closeGame" id="closeGameBtn">‹ Retour au chat</button>
+    <div id="gameStatus">Chargement...</div>
+    <div id="board"></div>
+    <button id="resetGame">Nouvelle partie</button>
+  </div>
+</div>
+
+<!-- Modale generique (nouvelle discussion / rejoindre / supprimer) -->
+<div id="modalOverlay">
+  <div class="modalBox" id="modalBox"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+/* ===================== Etat local ===================== */
+let myName = localStorage.getItem('duochat_name') || '';
+let myPin = localStorage.getItem('duochat_pin') || '';
+let serverUrl = localStorage.getItem('duochat_server') || '';
+let myDeviceId = localStorage.getItem('duochat_device') || '';
+if (!myDeviceId) {
+  myDeviceId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+  localStorage.setItem('duochat_device', myDeviceId);
+}
+function getConvos(){ try { return JSON.parse(localStorage.getItem('duochat_convos') || '[]'); } catch(e){ return []; } }
+function saveConvos(list){ localStorage.setItem('duochat_convos', JSON.stringify(list)); }
+
+let socket = null;
+let currentRoom = null; // {code, label}
+let gameActive = false;
+
+/* ===================== Ecran 1 : configuration ===================== */
+const setupScreen = document.getElementById('setupScreen');
+const lockScreen = document.getElementById('lockScreen');
+if (myName && myPin && serverUrl) {
+  setupScreen.style.display = 'none';
+  showLock();
+} else {
+  document.getElementById('setupOk').onclick = () => {
+    const name = document.getElementById('setupName').value.trim();
+    const srv = document.getElementById('setupServer').value.trim();
+    const pin = document.getElementById('setupPin').value.trim();
+    const err = document.getElementById('setupError');
+    if (!name) { err.textContent = 'Entre ton prénom.'; return; }
+    if (!/^https?:\/\//.test(srv)) { err.textContent = "L'adresse du serveur doit commencer par https://"; return; }
+    if (!/^\d{4}$/.test(pin)) { err.textContent = 'Le code doit contenir exactement 4 chiffres.'; return; }
+    localStorage.setItem('duochat_name', name);
+    localStorage.setItem('duochat_pin', pin);
+    localStorage.setItem('duochat_server', srv.replace(/\/$/, ''));
+    myName = name; myPin = pin; serverUrl = srv.replace(/\/$/, '');
+    setupScreen.style.display = 'none';
+    showLock();
+  };
+}
+
+/* ===================== Ecran 2 : verrou PIN ===================== */
+let entered = '';
+function showLock(){
+  lockScreen.style.display = 'flex';
+  const keypad = document.getElementById('keypad');
+  keypad.innerHTML = '';
+  ['1','2','3','4','5','6','7','8','9','','0','⌫'].forEach(k => {
+    const b = document.createElement('button');
+    b.textContent = k;
+    if (k === '') { b.style.visibility = 'hidden'; }
+    else {
+      b.onclick = () => {
+        if (k === '⌫') { entered = entered.slice(0, -1); }
+        else if (entered.length < 4) { entered += k; }
+        updateDots();
+        if (entered.length === 4) checkPin();
+      };
+    }
+    keypad.appendChild(b);
+  });
+}
+function updateDots(){
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('filled', i < entered.length));
+}
+function checkPin(){
+  if (entered === myPin) {
+    lockScreen.style.display = 'none';
+    initSocket();
+    showList();
+  } else {
+    document.getElementById('lockError').textContent = 'Code incorrect.';
+    setTimeout(() => { entered = ''; updateDots(); document.getElementById('lockError').textContent = ''; }, 500);
+  }
+}
+
+/* ===================== Connexion socket globale ===================== */
+function initSocket(){
+  socket = io(serverUrl);
+  socket.on('connect', () => setConnStatus('Connecté ✅', true));
+  socket.on('disconnect', () => setConnStatus('Déconnecté, reconnexion...', false));
+
+  socket.on('room_init', (data) => {
+    renderMessages(data.messages || []);
+    gameActive = !!(data.game && data.game.active);
+    renderBoard(data.game);
+  });
+  socket.on('new_message', (msg) => { appendMessage(msg); updateConvoPreview(msg); });
+  socket.on('message_deleted', ({ messageId }) => {
+    const el = document.querySelector('[data-mid="' + messageId + '"]');
+    if (el) el.remove();
+  });
+  socket.on('game_invite', ({ from }) => {
+    if (!currentRoom) return;
+    document.getElementById('inviteText').textContent = from + ' te propose une partie de morpion.';
+    document.getElementById('inviteBanner').classList.add('active');
+  });
+  socket.on('game_declined', () => {
+    showToast('Invitation refusée.');
+  });
+  socket.on('game_started', (state) => {
+    gameActive = true;
+    document.getElementById('inviteBanner').classList.remove('active');
+    renderBoard(state);
+    openGamePanel();
+  });
+  socket.on('game_update', (state) => { renderBoard(state); });
+  socket.on('peer_status', ({ name, online }) => {
+    const sub = document.getElementById('roomSub');
+    if (currentRoom) sub.textContent = online ? (name + ' est en ligne') : '';
+  });
+}
+function setConnStatus(text, ok){
+  const el = document.getElementById('connStatus');
+  el.textContent = text;
+  if (ok) setTimeout(() => { el.textContent = ''; }, 1500);
+}
+
+/* ===================== Ecran 3 : liste des discussions ===================== */
+const listScreen = document.getElementById('listScreen');
+const roomScreen = document.getElementById('roomScreen');
+function showList(){
+  listScreen.classList.add('active');
+  roomScreen.classList.remove('active');
+  currentRoom = null;
+  renderConvoList();
+}
+function renderConvoList(){
+  const list = getConvos();
+  const wrap = document.getElementById('convoList');
+  wrap.innerHTML = '';
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="emptyState">Aucune discussion pour l\'instant.<br>Appuie sur + pour en créer une ou en rejoindre une.</div>';
+    return;
+  }
+  list.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'convoRow';
+    row.innerHTML = '<div class="convoAvatar"></div><div class="convoInfo"><p class="label"></p><p class="preview"></p></div>';
+    row.querySelector('.convoAvatar').textContent = (c.label || '?').slice(0,1).toUpperCase();
+    row.querySelector('.label').textContent = c.label || c.code;
+    row.querySelector('.preview').textContent = c.preview || ('Code : ' + c.code);
+    row.onclick = () => openRoom(c);
+    wrap.appendChild(row);
+  });
+}
+function updateConvoPreview(msg){
+  const list = getConvos();
+  const idx = list.findIndex(c => c.code === (currentRoom && currentRoom.code));
+  if (idx === -1) return;
+  list[idx].preview = msg.type === 'text' ? (msg.sender + ': ' + msg.content).slice(0,40) : (msg.sender + ': ' + (msg.type === 'image' ? '📷 Photo' : '🎤 Note vocale'));
+  saveConvos(list);
+}
+
+document.getElementById('newConvoBtn').onclick = openNewConvoModal;
+
+/* ===================== Ecran 4 : conversation ===================== */
+function openRoom(convo){
+  currentRoom = convo;
+  document.getElementById('roomLabel').textContent = convo.label || convo.code;
+  document.getElementById('roomSub').textContent = '';
+  document.getElementById('chatLog').innerHTML = '';
+  document.getElementById('inviteBanner').classList.remove('active');
+  closeGamePanel();
+  listScreen.classList.remove('active');
+  roomScreen.classList.add('active');
+  socket.emit('join_room', { code: convo.code, name: myName, deviceId: myDeviceId });
+}
+document.getElementById('backBtn').onclick = showList;
+
+function renderMessages(list){
+  const log = document.getElementById('chatLog');
+  log.innerHTML = '';
+  list.forEach(appendMessage);
+}
+function appendMessage(m){
+  const log = document.getElementById('chatLog');
+  const isMe = m.deviceId === myDeviceId;
+  const wrap = document.createElement('div');
+  wrap.className = 'msgWrap ' + (isMe ? 'me' : 'them');
+  wrap.setAttribute('data-mid', m.id);
+  const bubble = document.createElement('div');
+  bubble.className = 'msg ' + (isMe ? 'me' : 'them');
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'name';
+  nameSpan.textContent = isMe ? 'Toi' : m.sender;
+  bubble.appendChild(nameSpan);
+
+  if (m.type === 'image') {
+    const img = document.createElement('img');
+    img.src = m.content;
+    bubble.appendChild(img);
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'saveBtn';
+    saveBtn.textContent = 'Enregistrer';
+    saveBtn.onclick = () => savePhoto(m.content);
+    bubble.appendChild(document.createElement('br'));
+    bubble.appendChild(saveBtn);
+  } else if (m.type === 'audio') {
+    const audio = document.createElement('audio');
+    audio.src = m.content;
+    audio.controls = true;
+    bubble.appendChild(audio);
+  } else {
+    bubble.appendChild(document.createTextNode(m.content));
+  }
+
+  wrap.appendChild(bubble);
+
+  const actions = document.createElement('div');
+  actions.className = 'msgActions';
+  const delBtn = document.createElement('button');
+  delBtn.textContent = 'Supprimer';
+  delBtn.onclick = () => confirmDeleteMessage(m.id);
+  actions.appendChild(delBtn);
+  wrap.appendChild(actions);
+
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+function confirmDeleteMessage(id){
+  showModal({
+    title: 'Supprimer ce message ?',
+    bodyHtml: '<p class="small">Il sera supprimé pour les deux personnes.</p>',
+    buttons: [
+      { label: 'Annuler', cls: 'secondary', onClick: closeModal },
+      { label: 'Supprimer', cls: 'danger', onClick: () => { socket.emit('delete_message', { messageId: id }); closeModal(); } }
+    ]
+  });
+}
+
+async function savePhoto(dataUrl){
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+  } catch (e) {}
+  window.open(dataUrl, '_blank');
+}
+
+/* ---- Envoi de texte ---- */
+document.getElementById('sendBtn').onclick = sendText;
+document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendText(); });
+function sendText(){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !socket || !currentRoom) return;
+  input.value = '';
+  socket.emit('send_message', { type: 'text', content: text });
+}
+
+/* ---- Envoi de photo ---- */
+const photoInput = document.getElementById('photoInput');
+document.getElementById('photoBtn').onclick = () => photoInput.click();
+photoInput.addEventListener('change', () => {
+  const file = photoInput.files[0];
+  if (!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    img.onload = () => {
+      const maxW = 1080;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      socket.emit('send_message', { type: 'image', content: dataUrl });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  photoInput.value = '';
+});
+
+/* ---- Notes vocales ---- */
+let mediaRecorder = null;
+let audioChunks = [];
+const micBtn = document.getElementById('micBtn');
+micBtn.onclick = async () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = () => socket.emit('send_message', { type: 'audio', content: reader.result });
+      reader.readAsDataURL(blob);
+      micBtn.classList.remove('recording');
+      stream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorder.start();
+    micBtn.classList.add('recording');
+  } catch (e) {
+    showToast("Micro indisponible ou refusé.");
+  }
+};
+
+/* ===================== Morpion ===================== */
+const gamePanel = document.getElementById('gamePanel');
+document.getElementById('gameBtn').onclick = () => {
+  if (gameActive) { openGamePanel(); }
+  else { socket.emit('game_invite'); showToast('Invitation envoyée...'); }
+};
+document.getElementById('closeGameBtn').onclick = closeGamePanel;
+document.getElementById('inviteAccept').onclick = () => {
+  socket.emit('game_accept');
+  document.getElementById('inviteBanner').classList.remove('active');
+};
+document.getElementById('inviteDecline').onclick = () => {
+  socket.emit('game_decline');
+  document.getElementById('inviteBanner').classList.remove('active');
+};
+function openGamePanel(){ gamePanel.classList.add('active'); }
+function closeGamePanel(){ gamePanel.classList.remove('active'); }
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('gameStatus');
+document.getElementById('resetGame').onclick = () => socket && socket.emit('reset_game');
+function checkWinner(c){
+  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for (const [a,b,cc] of lines) if (c[a] && c[a]===c[b] && c[a]===c[cc]) return c[a];
+  if (c.every(x => x)) return 'draw';
+  return null;
+}
+function renderBoard(state){
+  if (!state) return;
+  const cells = state.cells || Array(9).fill('');
+  boardEl.innerHTML = '';
+  cells.forEach((v, i) => {
+    const c = document.createElement('div');
+    c.className = 'cell';
+    c.textContent = v;
+    c.onclick = () => socket && socket.emit('play_move', { index: i });
+    boardEl.appendChild(c);
+  });
+  const winner = checkWinner(cells);
+  const turn = state.turn || 'X';
+  statusEl.textContent = winner === 'draw' ? 'Match nul !' : winner ? (winner + ' a gagné 🎉') : ('Tour de : ' + turn);
+}
+
+/* ===================== Notifications push ===================== */
+let swRegistration = null;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(reg => { swRegistration = reg; }).catch(() => {});
+}
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+document.getElementById('notifBtn').onclick = async () => {
+  if (!('Notification' in window) || !swRegistration) { showToast('Notifications non supportées ici.'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { showToast('Notifications refusées.'); return; }
+  try {
+    const res = await fetch(serverUrl + '/vapid-public-key');
+    const { publicKey } = await res.json();
+    const sub = await swRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+    socket.emit('subscribe_push', { subscription: sub.toJSON() });
+    showToast('Notifications activées ✅');
+  } catch (e) {
+    showToast('Impossible d\'activer les notifications.');
+  }
+};
+
+/* ===================== Modales generiques ===================== */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalBox = document.getElementById('modalBox');
+function showModal({ title, bodyHtml, buttons }){
+  modalBox.innerHTML = '<h3></h3><div class="body"></div><div class="row"></div>';
+  modalBox.querySelector('h3').textContent = title;
+  modalBox.querySelector('.body').innerHTML = bodyHtml || '';
+  const row = modalBox.querySelector('.row');
+  buttons.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = b.cls || 'secondary';
+    btn.textContent = b.label;
+    btn.onclick = b.onClick;
+    row.appendChild(btn);
+  });
+  modalOverlay.classList.add('active');
+}
+function closeModal(){ modalOverlay.classList.remove('active'); }
+
+function genCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function openNewConvoModal(){
+  modalBox.innerHTML = `
+    <h3>Nouvelle discussion</h3>
+    <div class="tabRow">
+      <button id="tabCreate" class="active">Créer</button>
+      <button id="tabJoin">Rejoindre</button>
+    </div>
+    <div class="tabPane active" id="paneCreate">
+      <p class="small">Choisis un nom pour cette discussion, puis partage le code généré à l'autre personne.</p>
+      <input id="createLabel" placeholder="Nom (ex: Alex)">
+      <div class="code-display" id="generatedCode"></div>
+      <div class="row">
+        <button class="secondary" id="cancelCreate">Annuler</button>
+        <button class="primary" id="confirmCreate">Commencer</button>
+      </div>
+    </div>
+    <div class="tabPane" id="paneJoin">
+      <p class="small">Entre le code reçu et donne un nom à cette discussion.</p>
+      <input id="joinCode" placeholder="Code à 6 caractères" maxlength="6" style="text-transform:uppercase;">
+      <input id="joinLabel" placeholder="Nom (ex: Alex)">
+      <div class="row">
+        <button class="secondary" id="cancelJoin">Annuler</button>
+        <button class="primary" id="confirmJoin">Rejoindre</button>
+      </div>
+    </div>
+  `;
+  const code = genCode();
+  modalBox.querySelector('#generatedCode').textContent = code;
+  modalBox.querySelector('#tabCreate').onclick = () => switchTab('Create');
+  modalBox.querySelector('#tabJoin').onclick = () => switchTab('Join');
+  function switchTab(name){
+    ['Create','Join'].forEach(n => {
+      modalBox.querySelector('#tab'+n).classList.toggle('active', n===name);
+      modalBox.querySelector('#pane'+n).classList.toggle('active', n===name);
+    });
+  }
+  modalBox.querySelector('#cancelCreate').onclick = closeModal;
+  modalBox.querySelector('#cancelJoin').onclick = closeModal;
+  modalBox.querySelector('#confirmCreate').onclick = () => {
+    const label = modalBox.querySelector('#createLabel').value.trim() || code;
+    addConvoAndOpen(code, label);
+  };
+  modalBox.querySelector('#confirmJoin').onclick = () => {
+    const c = modalBox.querySelector('#joinCode').value.trim().toUpperCase();
+    const label = modalBox.querySelector('#joinLabel').value.trim() || c;
+    if (c.length < 4) { showToast('Code invalide.'); return; }
+    addConvoAndOpen(c, label);
+  };
+  modalOverlay.classList.add('active');
+}
+function addConvoAndOpen(code, label){
+  const list = getConvos();
+  if (!list.find(c => c.code === code)) {
+    list.unshift({ code, label });
+    saveConvos(list);
+  }
+  closeModal();
+  renderConvoList();
+  openRoom({ code, label });
+}
+
+/* ===================== Toast simple ===================== */
+let toastTimer = null;
+function showToast(text){
+  let toast = document.getElementById('toastEl');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toastEl';
+    toast.style.cssText = 'position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; padding:10px 16px; border-radius:20px; font-size:13px; z-index:50;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 2200);
+}
+</script>
+</body>
+</html>

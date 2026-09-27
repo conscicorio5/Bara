@@ -1,0 +1,17 @@
+{
+  "name": "duochat-server",
+  "version": "2.0.0",
+  "description": "Appli de chat multi-discussions avec codes d'acces, jeu du morpion, photos, notes vocales et notifications",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "web-push": "^3.6.7"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
